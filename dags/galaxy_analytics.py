@@ -1,4 +1,3 @@
-from airflow.sdk import asset, Asset
 import logging
 import os
 
@@ -10,5 +9,7 @@ _DUCKDB_INSTANCE_NAME = os.getenv("DUCKDB_INSTANCE_NAME", "include/astronomy.db"
 _DUCKDB_TABLE_NAME = os.getenv("DUCKDB_TABLE_NAME", "galaxy_data")
 
 
-@asset()
-#Fill in the asset function here!
+# TODO: Fill in the asset function here!
+# @asset()
+# def galaxy_data_asset():
+#     pass

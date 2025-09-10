@@ -7,8 +7,7 @@ function, filters the data based on the distance from the Milky Way, and loads t
 filtered data into a DuckDB database.
 """
 
-from airflow.sdk import Asset, chain, Param, dag, task
-from airflow.models.baseoperator import chain
+from airflow.sdk import Param, dag, task
 from airflow.models.param import Param
 import duckdb
 import logging
@@ -29,10 +28,12 @@ _NUM_GALAXIES_TOTAL = int(os.getenv("NUM_GALAXIES_TOTAL", 10))
 _CLOSENESS_THRESHOLD_LY_DEFAULT = os.getenv("CLOSENESS_THRESHOLD_LY_DEFAULT", 500000)
 _CLOSENESS_THRESHOLD_LY_PARAMETER_NAME = "closeness_threshold_light_years"
 
-# Instantiate a DAG with the @dag decorator and set DAG parameters 
+# Instantiate a DAG with the @dag decorator and set DAG parameters
+
 
 @dag(
     start_date=datetime(2025, 4, 1),
+    schedule="0 0 * * *",  # Run daily at midnight (00:00)
     max_consecutive_failed_dag_runs=5,
     max_active_runs=1,
     doc_md=__doc__,
@@ -51,10 +52,8 @@ _CLOSENESS_THRESHOLD_LY_PARAMETER_NAME = "closeness_threshold_light_years"
         )
     },
 )
-
 def etl_galaxies():
-
-    @task()
+    @task(retries=3)
     def create_galaxy_table_in_duckdb(
         duckdb_instance_name: str = _DUCKDB_INSTANCE_NAME,
         table_name: str = _DUCKDB_TABLE_NAME,
@@ -103,7 +102,7 @@ def etl_galaxies():
 
         return galaxy_df
 
-    @task(queue='transformation-queue')
+    @task(queue="transformation-queue")
     def transform_galaxy_data(galaxy_df: pd.DataFrame, **context):
         """
         Filter the galaxy data based on the distance from the Milky Way.
@@ -176,15 +175,16 @@ def etl_galaxies():
         )
         t_log.info(tabulate(near_galaxies_df, headers="keys", tablefmt="pretty"))
 
-
     # Call tasks + set dependencies
     create_galaxy_table_in_duckdb_obj = create_galaxy_table_in_duckdb()
     extract_galaxy_data_obj = extract_galaxy_data()
     transform_galaxy_data_obj = transform_galaxy_data(extract_galaxy_data_obj)
     load_galaxy_data_obj = load_galaxy_data(transform_galaxy_data_obj)
 
-    chain(
-        create_galaxy_table_in_duckdb_obj, transform_galaxy_data_obj, load_galaxy_data_obj, print_loaded_galaxies()
-    )
+    # Set dependencies: table creation and data transformation can run in parallel,
+    # but loading requires both the table to exist and the data to be transformed
+    create_galaxy_table_in_duckdb_obj >> load_galaxy_data_obj
+    transform_galaxy_data_obj >> load_galaxy_data_obj >> print_loaded_galaxies()
+
 
 etl_galaxies()

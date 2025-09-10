@@ -7,7 +7,7 @@ function, filters the data based on the distance from the Milky Way, and loads t
 filtered data into a DuckDB database.
 """
 
-from airflow.sdk import Param, dag, task
+from airflow.sdk import Asset, Param, dag, task
 from airflow.models.param import Param
 import duckdb
 import logging
@@ -27,6 +27,9 @@ _DUCKDB_TABLE_NAME = os.getenv("DUCKDB_TABLE_NAME", "galaxy_data")
 _NUM_GALAXIES_TOTAL = int(os.getenv("NUM_GALAXIES_TOTAL", 10))
 _CLOSENESS_THRESHOLD_LY_DEFAULT = os.getenv("CLOSENESS_THRESHOLD_LY_DEFAULT", 500000)
 _CLOSENESS_THRESHOLD_LY_PARAMETER_NAME = "closeness_threshold_light_years"
+
+# Define the Asset that represents the galaxy data
+galaxy_data = Asset("galaxy_data")
 
 # Instantiate a DAG with the @dag decorator and set DAG parameters
 
@@ -151,7 +154,7 @@ def etl_galaxies():
         )
         t_log.info("Galaxy data loaded into DuckDB.")
 
-    @task()
+    @task(outlets=[galaxy_data])
     def print_loaded_galaxies(
         duckdb_instance_name: str = _DUCKDB_INSTANCE_NAME,
         table_name: str = _DUCKDB_TABLE_NAME,
